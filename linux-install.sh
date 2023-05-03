@@ -1,0 +1,57 @@
+#!/bin/bash
+
+agent_rpm_url="https://scc.alertlogic.net/software/al-agent-LATEST-1.x86_64.rpm"
+
+# Download AlertLogic agent RPM
+wget -O /tmp/al-agent-LATEST-1.x86_64.rpm "$agent_rpm_url"
+
+# Remove existing AlertLogic Agent
+yum remove -y al-agent
+
+# Remove existing AlertLogic directory
+rm -rf /var/alertlogic
+
+# Installing the Agent
+rpm -U /tmp/al-agent-LATEST-1.x86_64.rpm
+
+# Start AlertLogic agent
+/etc/init.d/al-agent start
+
+# Check if rsyslog daemon is active
+rsyslog_status=$(systemctl is-active rsyslog 2>/dev/null)
+
+# Check if syslog-ng daemon is active
+syslog_ng_status=$(systemctl is-active syslog-ng 2>/dev/null)
+
+# Set fact for rsyslog daemon
+if [[ "$rsyslog_status" == "active" ]] && [[ "$syslog_ng_status" != "active" ]]; then
+  syslog_daemon="rsyslog"
+fi
+
+# Set fact for syslog-ng daemon
+if [[ "$syslog_ng_status" == "active" ]] && [[ "$rsyslog_status" != "active" ]]; then
+  syslog_daemon="syslog-ng"
+fi
+
+# Print the active syslog daemon
+echo "Active syslog daemon: $syslog_daemon"
+
+# Add setting in rsyslog.conf
+if [[ "$syslog_daemon" == "rsyslog" ]]; then
+  echo "*.* @@127.0.0.1:1514;RSYSLOG_FileFormat" >> /etc/rsyslog.conf
+  systemctl restart rsyslog
+fi
+
+# Add settings in syslog-ng.conf
+if [[ "$syslog_daemon" == "syslog-ng" ]]; then
+  echo 'destination d_alertlogic {tcp("localhost" port(1514));};' | sudo tee -a /etc/syslog-ng/syslog-ng.conf
+  echo 'log { source(s_sys); destination(d_alertlogic); };' | sudo tee -a /etc/syslog-ng/syslog-ng.conf
+fi
+
+# Restart syslog-ng service if it is active
+if [[ "$syslog_daemon" == "syslog-ng" ]]; then
+  systemctl restart syslog-ng
+fi
+
+# Delete al-agent rpm file from tmp
+rm -f /tmp/al-agent-LATEST-1.x86_64.rpm
