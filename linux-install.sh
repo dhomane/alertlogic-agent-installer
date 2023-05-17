@@ -61,3 +61,7 @@ fi
 
 # Delete al-agent rpm file from tmp
 rm -f /tmp/al-agent-LATEST-1.x86_64.rpm
+
+# Display status
+
+/etc/init.d/al-agent status
