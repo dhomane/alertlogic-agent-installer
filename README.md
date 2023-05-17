@@ -2,8 +2,8 @@
 
 # Linux
 
-```
-curl -sSL https://raw.githubusercontent.com/dhomane/alertlogic-agent-installer/main/linux-install.sh | bash -x
+``` 
+curl -sSL https://raw.githubusercontent.com/dhomane/alertlogic-agent-installer/main/linux-install.sh | bash -x 
 ```
 
 # Windows
