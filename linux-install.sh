@@ -20,6 +20,14 @@ yum remove -y al-agent
 # Remove existing AlertLogic directory
 rm -rf /var/alertlogic
 
+# Check SELinux status
+
+selinux=$(getenforce)
+
+if [ "$selinux" == "Enforcing" ]; then
+    semanage port -a -t syslogd_port_t -p tcp 1514
+fi
+
 # Installing the Agent
 rpm -U /tmp/al-agent-LATEST-1.x86_64.rpm
 
