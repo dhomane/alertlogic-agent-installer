@@ -23,6 +23,9 @@ Set-Service -Name al_agent -StartupType Automatic
 # Start Alert Logic Agent service
 Start-Service -Name al_agent
 
+# Get Alert Logic Agent service status
+Get-Service -Name al_agent
+
 # Delete Alert Logic Agent MSI file from tmp
 Remove-Item $agent_msi_path -Force
 
