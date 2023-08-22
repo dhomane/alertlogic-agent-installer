@@ -6,16 +6,24 @@
 
 Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings" -Name "ProxyEnable" -Value 0
 
-$agent_url = "https://scc.alertlogic.net/software/al_agent-LATEST.msi"
-$agent_msi_path = "C:\al_agent-LATEST.msi"
+# Define path variables
+$agentUrl = "https://scc.alertlogic.net/software/al_agent-LATEST.msi"
+$agentMsiPath = "C:\al_agent-LATEST.msi"
 
-# Download Alert Logic Agent MSI
-$download_result = Invoke-WebRequest -Uri $agent_url -OutFile $agent_msi_path -UseBasicParsing
+# Stop the Alert Logic agent
+Stop-Service -Name al_agent -ErrorAction SilentlyContinue
 
-# Install Alert Logic Agent
+# Remove the stale Alertlogic files
+Remove-Item -Path "C:\Program Files (x86)\Common Files\AlertLogic" -Recurse -Force -ErrorAction SilentlyContinue
 
-Start-Process msiexec -ArgumentList "/i $agent_msi_path install_only=1 /q REBOOT=ReallySuppress" -Wait
+# Uninstall the Agent
+wmic product where "name='AL Agent'" call uninstall /nointeractive
 
+# Download latest Alert Logic Agent MSI
+Invoke-WebRequest -Uri $agentUrl -OutFile $agentMsiPath
+
+# Install latest Alert Logic agent
+Start-Process msiexec -ArgumentList "/i $agentMsiPath install_only=1 /q REBOOT=ReallySuppress" -Wait
 
 # Set Alert Logic Agent service to start automatically
 Set-Service -Name al_agent -StartupType Automatic
@@ -23,11 +31,14 @@ Set-Service -Name al_agent -StartupType Automatic
 # Start Alert Logic Agent service
 Start-Service -Name al_agent
 
+# Restart Alert Logic Agent service once more to ensure it is running
+Restart-Service -Name al_agent
+
 # Get Alert Logic Agent service status
 Get-Service -Name al_agent
 
-# Delete Alert Logic Agent MSI file from tmp
-Remove-Item $agent_msi_path -Force
+# Delete Alert Logic Agent MSI file
+Remove-Item -Path $agentMsiPath -Force
 
 # Enable Windows Proxy
 
