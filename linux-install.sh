@@ -13,6 +13,20 @@ else
   agent_installed=0
 fi
 
+# Check if rsyslog is installed
+if rpm -q rsyslog >/dev/null 2>&1; then
+  rsyslog_installed=1
+else
+  rsyslog_installed=0
+fi
+
+# Check if syslog-ng is installed
+if rpm -q syslog-ng >/dev/null 2>&1; then
+  syslog_ng_installed=1
+else
+  syslog_ng_installed=0
+fi
+
 
 # Remove existing AlertLogic Agent
 yum remove -y al-agent
@@ -48,6 +62,20 @@ fi
 # Set fact for syslog-ng daemon
 if [[ "$syslog_ng_status" == "active" ]] && [[ "$rsyslog_status" != "active" ]]; then
   syslog_daemon="syslog-ng"
+fi
+
+# Restart rsyslog daemon if not active
+if [[ "$syslog_ng_status" != "active" ]] && [[ "$rsyslog_status" != "active" ]]; then
+  sudo systemctl restart rsyslog ; sleep 5 ;  sudo systemctl enable --now rsyslog
+  syslog_daemon="rsyslog"
+fi
+
+
+# Install rsyslog is no logging daemon present
+if [[ $syslog_ng_installed == 0 ]] && [[ $rsyslog_installed == 0 ]]; then
+  yum install -y rsyslog
+  sudo systemctl enable --now rsyslog
+  syslog_daemon="rsyslog"
 fi
 
 # Print the active syslog daemon
