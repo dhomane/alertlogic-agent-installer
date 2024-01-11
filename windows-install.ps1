@@ -6,6 +6,7 @@ if ($agentService) {
     Restart-Service -Name al_agent
     Get-Service -Name al_agent
     Set-Service -Name al_agent -StartupType Automatic
+    echo "AlertLogic Agent already installed and running, exiting script..."
     exit
 }
 
