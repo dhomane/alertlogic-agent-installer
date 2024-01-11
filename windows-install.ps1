@@ -1,3 +1,17 @@
+# Check if the "al_agent" service is present
+$agentService = Get-Service -Name al_agent -ErrorAction SilentlyContinue
+
+if ($agentService) {
+    # If service is present, restart, get status, and set to start automatically
+    Restart-Service -Name al_agent
+    Get-Service -Name al_agent
+    Set-Service -Name al_agent -StartupType Automatic
+    exit
+}
+
+# If service is not present, proceed with installation
+
+
 # Download and Install Alert Logic Agent MSI
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
