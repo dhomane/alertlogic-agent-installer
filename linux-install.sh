@@ -82,16 +82,34 @@ fi
 echo "Active syslog daemon: $syslog_daemon"
 
 # Add setting in rsyslog.conf
-if [[ "$syslog_daemon" == "rsyslog" ]] && [[ $agent_installed == 0 ]] ; then
-  echo "*.* @@127.0.0.1:1514;RSYSLOG_FileFormat" >> /etc/rsyslog.conf
-  sudo systemctl restart rsyslog
+if [[ "$syslog_daemon" == "rsyslog" ]]; then
+  if ! grep -q "*.* @@127.0.0.1:1514;RSYSLOG_FileFormat" /etc/rsyslog.conf; then
+    if echo "*.* @@127.0.0.1:1514;RSYSLOG_FileFormat" >> /etc/rsyslog.conf && systemctl restart rsyslog; then
+      echo "rsyslog settings added and restarted successfully."
+    else
+      echo "Error adding rsyslog settings."
+      exit 1
+    fi
+  else
+    echo "rsyslog settings already present in /etc/rsyslog.conf. Skipping addition."
+  fi
 fi
 
 # Add settings in syslog-ng.conf
-if [[ "$syslog_daemon" == "syslog-ng" ]] && [[ $agent_installed == 0 ]] ; then
-  echo 'destination d_alertlogic {tcp("localhost" port(1514));};' | sudo tee -a /etc/syslog-ng/syslog-ng.conf
-  echo 'log { source(s_sys); destination(d_alertlogic); };' | sudo tee -a /etc/syslog-ng/syslog-ng.conf
-  sudo systemctl restart syslog-ng
+if [[ "$syslog_daemon" == "syslog-ng" ]]; then
+  if ! grep -q "destination d_alertlogic {tcp(\"localhost\" port(1514));};" /etc/syslog-ng/syslog-ng.conf || 
+       ! grep -q "log { source(s_sys); destination(d_alertlogic); };" /etc/syslog-ng/syslog-ng.conf; then
+    if echo 'destination d_alertlogic {tcp("localhost" port(1514));};' | tee -a /etc/syslog-ng/syslog-ng.conf &&
+       echo 'log { source(s_sys); destination(d_alertlogic); };' | tee -a /etc/syslog-ng/syslog-ng.conf &&
+       systemctl restart syslog-ng; then
+      echo "syslog-ng settings added and restarted successfully."
+    else
+      echo "Error adding syslog-ng settings."
+      exit 1
+    fi
+  else
+    echo "syslog-ng settings already present in /etc/syslog-ng/syslog-ng.conf. Skipping addition."
+  fi
 fi
 
 
