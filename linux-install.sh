@@ -120,6 +120,20 @@ rm -f /tmp/al-agent-LATEST-1.x86_64.rpm
 # Restart AlertLogic agent
 /etc/init.d/al-agent restart
 
-# Display status
 
+
+# Restart the active syslog daemon
+if [[ "$syslog_daemon" == "rsyslog" ]]; then
+  systemctl restart rsyslog
+  echo "rsyslog daemon restarted successfully."
+elif [[ "$syslog_daemon" == "syslog-ng" ]]; then
+  systemctl restart syslog-ng
+  echo "syslog-ng daemon restarted successfully."
+fi
+
+# Display status
 /etc/init.d/al-agent status
+
+
+
+
