@@ -70,13 +70,6 @@ if [[ "$rsyslog_status" == "active" ]] && [[ "$syslog_ng_status" == "active" ]];
 fi
 
 
-# Restart rsyslog daemon if not active
-if [[ "$syslog_ng_status" != "active" ]] && [[ "$rsyslog_status" != "active" ]]; then
-  sudo systemctl restart rsyslog ; sleep 5 ;  sudo systemctl enable --now rsyslog
-  syslog_daemon="rsyslog"
-fi
-
-
 # Install rsyslog is no logging daemon present
 if [[ $syslog_ng_installed == 0 ]] && [[ $rsyslog_installed == 0 ]]; then
   yum install -y rsyslog
