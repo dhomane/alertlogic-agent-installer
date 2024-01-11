@@ -123,10 +123,10 @@ rm -f /tmp/al-agent-LATEST-1.x86_64.rpm
 
 # Restart the active syslog daemon
 if [[ "$syslog_daemon" == "rsyslog" ]]; then
-  sudo systemctl stop rsyslog ; sleep 10 ; sudo systemctl start rsyslog
+  sudo systemctl stop rsyslog ; sleep 2 ; sudo systemctl start rsyslog
   echo "rsyslog daemon restarted successfully."
 elif [[ "$syslog_daemon" == "syslog-ng" ]]; then
-  sudo systemctl stop syslog-ng ; sleep 10 ; sudo systemctl start syslog-ng
+  sudo systemctl stop syslog-ng ; sleep 2 ; sudo systemctl start syslog-ng
   echo "syslog-ng daemon restarted successfully."
 fi
 
