@@ -64,6 +64,12 @@ if [[ "$syslog_ng_status" == "active" ]] && [[ "$rsyslog_status" != "active" ]];
   syslog_daemon="syslog-ng"
 fi
 
+# Set fact for rsyslog as active daemon when both are active
+if [[ "$rsyslog_status" == "active" ]] && [[ "$syslog_ng_status" == "active" ]]; then
+  syslog_daemon="rsyslog"
+fi
+
+
 # Restart rsyslog daemon if not active
 if [[ "$syslog_ng_status" != "active" ]] && [[ "$rsyslog_status" != "active" ]]; then
   sudo systemctl restart rsyslog ; sleep 5 ;  sudo systemctl enable --now rsyslog
