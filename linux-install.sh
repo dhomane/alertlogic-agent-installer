@@ -84,7 +84,7 @@ echo "Active syslog daemon: $syslog_daemon"
 # Add setting in rsyslog.conf
 if [[ "$syslog_daemon" == "rsyslog" ]]; then
   if ! grep -q "*.* @@127.0.0.1:1514;RSYSLOG_FileFormat" /etc/rsyslog.conf; then
-    if sudo systemctl stop rsyslog && echo "*.* @@127.0.0.1:1514;RSYSLOG_FileFormat" >> /etc/rsyslog.conf && systemctl start rsyslog; then
+    if sudo systemctl stop rsyslog && echo "*.* @@127.0.0.1:1514;RSYSLOG_FileFormat" >> /etc/rsyslog.conf && sudo systemctl start rsyslog; then
       echo "rsyslog settings added and restarted successfully."
     else
       echo "Error adding rsyslog settings."
