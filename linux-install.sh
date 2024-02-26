@@ -83,7 +83,9 @@ echo "Active syslog daemon: $syslog_daemon"
 # Add setting in rsyslog.conf
 if [[ "$syslog_daemon" == "rsyslog" ]]; then
   if ! grep -q "*.* @@127.0.0.1:1514;RSYSLOG_FileFormat" /etc/rsyslog.conf; then
-    if sudo systemctl stop rsyslog && echo "*.* @@127.0.0.1:1514;RSYSLOG_FileFormat" >> /etc/rsyslog.conf && sudo systemctl start rsyslog; then
+    if sudo systemctl stop rsyslog && \
+       echo -e "\n# AlertLogic config start\n*.* @@127.0.0.1:1514;RSYSLOG_FileFormat\n# AlertLogic config end\n" >> /etc/rsyslog.conf && \
+       sudo systemctl start rsyslog; then
       echo "rsyslog settings added and restarted successfully."
     else
       echo "Error adding rsyslog settings."
@@ -93,6 +95,7 @@ if [[ "$syslog_daemon" == "rsyslog" ]]; then
     echo "rsyslog settings already present in /etc/rsyslog.conf. Skipping addition."
   fi
 fi
+
 
 # Add settings in syslog-ng.conf
 if [[ "$syslog_daemon" == "syslog-ng" ]]; then
