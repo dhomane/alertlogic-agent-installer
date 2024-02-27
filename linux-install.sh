@@ -135,10 +135,10 @@ fi
 
 # Restart the active syslog daemon
 if [[ "$syslog_daemon" == "rsyslog" ]]; then
-  sudo systemctl stop rsyslog ; sleep 10 ; sudo systemctl start rsyslog ; sudo systemctl status rsyslog --no-pager
+  sudo systemctl stop rsyslog ; sleep 3 ; sudo systemctl start rsyslog ; sudo systemctl status rsyslog --no-pager
   echo "rsyslog daemon restarted successfully."
 elif [[ "$syslog_daemon" == "syslog-ng" ]]; then
-  sudo systemctl stop syslog-ng ; sleep 10 ; sudo systemctl start syslog-ng ; sudo systemctl status syslog-ng --no-pager
+  sudo systemctl stop syslog-ng ; sleep 3 ; sudo systemctl start syslog-ng ; sudo systemctl status syslog-ng --no-pager
   echo "syslog-ng daemon restarted successfully."
 fi
 
