@@ -149,7 +149,8 @@ fi
 /etc/init.d/al-agent status
 
 echo "======================"
-echo "Run these commands - systemctl restart rsyslog ; systemctl status rsyslog"
+echo "Run these commands"
+echo "systemctl restart rsyslog ; systemctl status rsyslog"
 echo "======================"
 
 
