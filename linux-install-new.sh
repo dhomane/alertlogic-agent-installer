@@ -14,8 +14,6 @@ agent_rpm_file="/tmp/al-agent-LATEST-1.x86_64.rpm"
 # Download AlertLogic agent RPM using curl
 curl -o "$agent_rpm_file" "$agent_rpm_url"
 
-# Install or upgrade AlertLogic agent
-rpm -U "$agent_rpm_file"
 
 # Remove existing AlertLogic Agent
 yum remove -y al-agent
