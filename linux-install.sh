@@ -148,6 +148,9 @@ fi
 # Display status
 /etc/init.d/al-agent status
 
+echo "======================"
+echo "Run these commands - systemctl restart rsyslog ; systemctl status rsyslog"
+echo "======================"
 
 
 
