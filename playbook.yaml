@@ -1,0 +1,160 @@
+---
+- name: Download and install AlertLogic Agent
+  hosts: localhost
+  become: true
+  gather_facts: false
+  ignore_unreachable: true
+  ignore_errors: true
+
+
+  vars:
+    agent_rpm_url: https://scc.alertlogic.net/software/al-agent-LATEST-1.x86_64.rpm
+
+  tasks:
+
+
+    - name: Download AlertLogic agent RPM
+      get_url:
+        url: "{{ agent_rpm_url }}"
+        dest: "/tmp/al-agent-LATEST-1.x86_64.rpm"
+
+    - name: Install rsyslog
+      shell: yum install -y rsyslog
+
+    - name: Remove existing AlertLogic Agent
+      shell: yum remove -y al-agent
+
+      
+
+    - name: Remove existing AlertLogic directory
+      shell: rm -rf /var/alertlogic      
+
+      
+
+    - name: Installing the Agent
+      shell:
+          cmd: '{{ item }}' 
+      with_items:
+          - "rpm -U /tmp/al-agent-LATEST-1.x86_64.rpm"
+
+      
+
+    - name: Check SELinux status
+      command: getenforce
+      register: selinux
+
+    - name: Set selinux port
+      when: selinux.stdout == "Enforcing"
+      command: semanage port -a -t syslogd_port_t -p tcp 1514
+
+    - name: Start AlertLogic agent
+      shell:
+          cmd: '{{ item }}' 
+      with_items:
+          - "/etc/init.d/al-agent start"
+
+      
+
+    - name: Check if rsyslog daemon is active
+      shell: "systemctl is-active rsyslog"
+      register: rsyslog_status
+
+      
+
+
+    - name: Check if syslog-ng daemon is active
+      shell: "systemctl is-active syslog-ng"
+      register: syslog_ng_status
+
+      
+
+
+    - name: Set fact for rsyslog daemon
+      set_fact:
+        syslog_daemon: "rsyslog"
+      when: rsyslog_status.stdout == "active" and syslog_ng_status.rc != 0
+
+      
+
+
+    - name: Set fact for syslog-ng daemon
+      set_fact:
+        syslog_daemon: "syslog-ng"
+      when: syslog_ng_status.stdout == "active" and rsyslog_status.rc != 0
+
+      
+
+
+    - name: Print the active syslog daemon
+      debug:
+        var: syslog_daemon
+
+      
+
+
+    - name: Add setting in rsyslog.conf
+      lineinfile:
+        path: /etc/rsyslog.conf
+        line: "*.* @@127.0.0.1:1514;RSYSLOG_FileFormat"
+        state: present
+      when: syslog_daemon == "rsyslog"
+
+      
+
+    - name: Restart rsyslog service if it is active
+      systemd:
+        name: rsyslog
+        state: restarted
+      when: syslog_daemon == "rsyslog"
+
+      
+
+    - name: Add setting 1 in syslog-ng.conf 
+      lineinfile:
+          path: /etc/syslog-ng/syslog-ng.conf
+          line: destination d_alertlogic {tcp("localhost" port(1514));};
+          insertafter: ^destination*
+      when: syslog_daemon == "syslog-ng"
+
+      
+
+    - name: Add setting 2 in syslog-ng.conf 
+      lineinfile:
+          path: /etc/syslog-ng/syslog-ng.conf
+          line: log { source(s_sys); destination(d_alertlogic); };
+          insertafter: ^log*
+      when: syslog_daemon == "syslog-ng"
+
+      
+
+    - name: Restart syslog-ng service if it is active
+      systemd:
+        name: syslog-ng
+        state: restarted
+      when: syslog_daemon == "syslog-ng"
+
+      
+
+    - name: Delete al-agent rpm file from tmp
+      file:
+        path: /tmp/al-agent-LATEST-1.x86_64.rpm
+        state: absent
+
+      
+
+    - name: Check if AlertLogic Agent is installed
+      shell: rpm -qa | grep al-agent
+      register: al_agent_installed
+      changed_when: false
+      ignore_errors: true
+
+    - name: Check if AlertLogic Agent is running
+      shell: /etc/init.d/al-agent status
+      register: al_agent_agent_running
+      changed_when: false
+      ignore_errors: true
+      
+    - name: Display Existing Status
+      debug:
+        msg: |
+          AlertLogic Agent is {% if al_agent_installed.rc == 0 %} Installed {% else %} NOT Installed {% endif %} and {% if al_agent_agent_running.rc == 0 %} Running {% else %} NOT Running {% endif %}
