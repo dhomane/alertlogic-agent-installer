@@ -17,6 +17,9 @@ curl -o "$agent_rpm_file" "$agent_rpm_url"
 # Install or upgrade AlertLogic agent
 rpm -U "$agent_rpm_file"
 
+# Remove existing AlertLogic Agent
+yum remove -y al-agent
+
 # Start AlertLogic agent
 /etc/init.d/al-agent start
 
