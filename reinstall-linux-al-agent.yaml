@@ -82,7 +82,10 @@
         syslog_daemon: "syslog-ng"
       when: syslog_ng_status.stdout == "active" and rsyslog_status.rc != 0
 
-      
+    - name: Set fallback fact
+      set_fact:
+        syslog_daemon: "rsyslog"
+      when: syslog_ng_status.stdout == "active" and syslog_status.stdout == "active"
 
 
     - name: Print the active syslog daemon
