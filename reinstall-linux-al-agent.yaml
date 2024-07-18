@@ -12,10 +12,6 @@
     min_version: "2.20"
 
   tasks:
-    - name: Ensure the dnf Python module is installed
-      dnf:
-        name: python3-dnf
-        state: present
 
     - name: Check if AlertLogic Agent is installed
       shell: rpm -qa | grep al-agent
@@ -45,10 +41,10 @@
       meta: end_host
       when: agent_ok
 
-    - name: Install required packages
-      dnf:
-        name: rsyslog
-        state: present
+    - name: Install rsyslog
+      shell: |
+        yum install -y rsyslog
+        sudo systemctl enable --now rsyslog
 
     - name: Download AlertLogic agent RPM
       get_url:
