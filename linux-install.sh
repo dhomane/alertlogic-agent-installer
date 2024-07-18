@@ -18,6 +18,7 @@ get_agent_version() {
 
 install_rsyslog() {
   sudo dnf install -y rsyslog
+  sudo systemctl enable --now rsyslog
 }
 
 download_agent() {
