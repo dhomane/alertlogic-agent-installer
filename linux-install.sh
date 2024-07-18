@@ -9,14 +9,16 @@ check_agent_installed() {
 }
 
 check_agent_running() {
-  if /etc/init.d/al-agent status | grep -q -v "NOT"; then
-    echo "Agent is running"
-    return 0
-  else
+  status_output=$(/etc/init.d/al-agent status)
+  if [[ "$status_output" == *"al-agent is NOT running."* ]]; then
     echo "Agent is NOT running"
     return 1
+  else
+    echo "Agent is running"
+    return 0
   fi
 }
+
 
 
 get_agent_version() {
@@ -99,10 +101,12 @@ restart_rsyslog () {
 main() {
   AGENT_INSTALLED=$(check_agent_installed)
   RSYSLOG_STATUS=$(check_rsyslog_running)
+  
   if [ -n "${AGENT_INSTALLED}" ]; then
     AGENT_RUNNING=$(check_agent_running)
     AGENT_VERSION=$(get_agent_version)
-    if [ -n "${AGENT_RUNNING}" ] && [ "$(printf '%s\n' "$MIN_VERSION" "$AGENT_VERSION" | sort -V | head -n1)" == "$MIN_VERSION" ] && [ "${RSYSLOG_STATUS}" == "active" ]; then
+    
+    if [ "${AGENT_RUNNING}" == "Agent is running" ] && [ "$(printf '%s\n' "$MIN_VERSION" "$AGENT_VERSION" | sort -V | head -n1)" == "$MIN_VERSION" ] && [ "${RSYSLOG_STATUS}" == "active" ]; then
       echo "AlertLogic Agent is installed, running, and above version ${MIN_VERSION}, and rsyslog is running"
       exit 0
     fi
