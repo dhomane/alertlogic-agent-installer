@@ -1,159 +1,122 @@
 #!/bin/bash
 
-agent_rpm_url="https://scc.alertlogic.net/software/al-agent-LATEST-1.x86_64.rpm"
+AGENT_RPM_URL="https://scc.alertlogic.net/software/al-agent-LATEST-1.x86_64.rpm"
+AGENT_RPM_DEST="/tmp/al-agent-LATEST-1.x86_64.rpm"
+MIN_VERSION="2.20"
 
-# Download AlertLogic agent RPM
-wget -O /tmp/al-agent-LATEST-1.x86_64.rpm "$agent_rpm_url"
+check_agent_installed() {
+  rpm -qa | grep al-agent
+}
 
+check_agent_running() {
+  /etc/init.d/al-agent status
+}
 
-# Check if al_agent is installed
-if rpm -q al-agent >/dev/null 2>&1; then
-  agent_installed=1
-else
-  agent_installed=0
-fi
+get_agent_version() {
+  rpm -qi al-agent | grep Version | awk '{print $3}'
+}
 
-# Check if rsyslog is installed
-if rpm -q rsyslog >/dev/null 2>&1; then
-  rsyslog_installed=1
-else
-  rsyslog_installed=0
-fi
+install_rsyslog() {
+  sudo dnf install -y rsyslog
+}
 
-# Check if syslog-ng is installed
-if rpm -q syslog-ng >/dev/null 2>&1; then
-  syslog_ng_installed=1
-else
-  syslog_ng_installed=0
-fi
+download_agent() {
+  curl -o "${AGENT_RPM_DEST}" "${AGENT_RPM_URL}"
+}
 
+remove_existing_agent() {
+  sudo dnf remove -y al-agent
+  sudo rm -rf /var/alertlogic
+}
 
-# Remove existing AlertLogic Agent
-yum remove -y al-agent
+install_agent() {
+  sudo dnf install -y "${AGENT_RPM_DEST}"
+}
 
-# Remove existing AlertLogic directory
-rm -rf /var/alertlogic
+check_selinux_status() {
+  getenforce
+}
 
-# Check SELinux status
+set_selinux_port() {
+  sudo semanage port -a -t syslogd_port_t -p tcp 1514
+}
 
-selinux=$(getenforce)
+start_agent() {
+  sudo /etc/init.d/al-agent start
+}
 
-if [ "$selinux" == "Enforcing" ]; then
-    semanage port -a -t syslogd_port_t -p tcp 1514
-fi
+check_syslog_status() {
+  systemctl is-active rsyslog
+}
 
-# Installing the Agent
-rpm -U /tmp/al-agent-LATEST-1.x86_64.rpm
+check_syslog_ng_status() {
+  systemctl is-active syslog-ng
+}
 
-# Start AlertLogic agent
-/etc/init.d/al-agent start
+configure_rsyslog() {
+  sudo sed -i '/^\*.\* @@127.0.0.1:1514;RSYSLOG_FileFormat/d' /etc/rsyslog.conf
+  echo "*.* @@127.0.0.1:1514;RSYSLOG_FileFormat" | sudo tee -a /etc/rsyslog.conf
+  sudo systemctl restart rsyslog
+}
 
-# Check if rsyslog daemon is active
-rsyslog_status=$(systemctl is-active rsyslog 2>/dev/null)
+configure_syslog_ng() {
+  sudo sed -i '/destination d_alertlogic {tcp("localhost" port(1514));};/d' /etc/syslog-ng/syslog-ng.conf
+  sudo sed -i '/log { source(s_sys); destination(d_alertlogic); };/d' /etc/syslog-ng/syslog-ng.conf
+  echo 'destination d_alertlogic {tcp("localhost" port(1514));};' | sudo tee -a /etc/syslog-ng/syslog-ng.conf
+  echo 'log { source(s_sys); destination(d_alertlogic); };' | sudo tee -a /etc/syslog-ng/syslog-ng.conf
+  sudo systemctl restart syslog-ng
+}
 
-# Check if syslog-ng daemon is active
-syslog_ng_status=$(systemctl is-active syslog-ng 2>/dev/null)
+cleanup_agent_rpm() {
+  rm -f "${AGENT_RPM_DEST}"
+}
 
-# Set fact for rsyslog daemon
-if [[ "$rsyslog_status" == "active" ]] && [[ "$syslog_ng_status" != "active" ]]; then
-  syslog_daemon="rsyslog"
-fi
-
-# Set fact for syslog-ng daemon
-if [[ "$syslog_ng_status" == "active" ]] && [[ "$rsyslog_status" != "active" ]]; then
-  syslog_daemon="syslog-ng"
-fi
-
-# Set fact for rsyslog as active daemon when both are active
-if [[ "$rsyslog_status" == "active" ]] && [[ "$syslog_ng_status" == "active" ]]; then
-  syslog_daemon="rsyslog"
-fi
-
-
-# Install rsyslog is no logging daemon present
-if [[ $syslog_ng_installed == 0 ]] && [[ $rsyslog_installed == 0 ]]; then
-  yum install -y rsyslog
-  sudo systemctl enable --now rsyslog
-  syslog_daemon="rsyslog"
-fi
-
-# Print the active syslog daemon
-echo "Active syslog daemon: $syslog_daemon"
-
-# Add setting in rsyslog.conf
-if [[ "$syslog_daemon" == "rsyslog" ]]; then
-  if ! grep -q "*.* @@127.0.0.1:1514;RSYSLOG_FileFormat" /etc/rsyslog.conf; then
-    if sudo systemctl stop rsyslog && \
-       echo -e "\n# AlertLogic config start\n*.* @@127.0.0.1:1514;RSYSLOG_FileFormat\n# AlertLogic config end\n" >> /etc/rsyslog.conf && \
-       sudo systemctl start rsyslog; then
-      echo "rsyslog settings added and restarted successfully."
-    else
-      echo "Error adding rsyslog settings."
-      exit 1
-    fi
+display_status() {
+  if [ -z "$(check_agent_installed)" ]; then
+    echo "AlertLogic Agent is NOT Installed"
   else
-    echo "rsyslog settings already present in /etc/rsyslog.conf. Skipping addition."
-  fi
-fi
-
-
-# Add settings in syslog-ng.conf
-if [[ "$syslog_daemon" == "syslog-ng" ]]; then
-  if ! grep -q "destination d_alertlogic {tcp(\"localhost\" port(1514));};" /etc/syslog-ng/syslog-ng.conf || 
-       ! grep -q "log { source(s_sys); destination(d_alertlogic); };" /etc/syslog-ng/syslog-ng.conf; then
-    if echo 'destination d_alertlogic {tcp("localhost" port(1514));};' | tee -a /etc/syslog-ng/syslog-ng.conf &&
-       echo 'log { source(s_sys); destination(d_alertlogic); };' | tee -a /etc/syslog-ng/syslog-ng.conf &&
-       systemctl restart syslog-ng; then
-      echo "syslog-ng settings added and restarted successfully."
+    echo "AlertLogic Agent is Installed"
+    if [ -z "$(check_agent_running)" ]; then
+      echo "AlertLogic Agent is NOT Running"
     else
-      echo "Error adding syslog-ng settings."
-      exit 1
+      echo "AlertLogic Agent is Running"
     fi
-  else
-    echo "syslog-ng settings already present in /etc/syslog-ng/syslog-ng.conf. Skipping addition."
   fi
-fi
+}
 
+main() {
+  AGENT_INSTALLED=$(check_agent_installed)
+  if [ -n "${AGENT_INSTALLED}" ]; then
+    AGENT_RUNNING=$(check_agent_running)
+    AGENT_VERSION=$(get_agent_version)
+    if [ -n "${AGENT_RUNNING}" ] && [ "$(printf '%s\n' "$MIN_VERSION" "$AGENT_VERSION" | sort -V | head -n1)" == "$MIN_VERSION" ]; then
+      echo "AlertLogic Agent is installed, running, and above version ${MIN_VERSION}"
+      exit 0
+    fi
+  fi
 
-# Delete al-agent rpm file from tmp
-rm -f /tmp/al-agent-LATEST-1.x86_64.rpm
+  install_rsyslog
+  download_agent
+  remove_existing_agent
+  install_agent
 
+  SELINUX_STATUS=$(check_selinux_status)
+  if [ "${SELINUX_STATUS}" == "Enforcing" ]; then
+    set_selinux_port
+  fi
 
-# Restart AlertLogic agent
-/etc/init.d/al-agent restart
+  start_agent
 
+  RSYSLOG_STATUS=$(check_syslog_status)
+  SYSLOG_NG_STATUS=$(check_syslog_ng_status)
+  if [ "${RSYSLOG_STATUS}" == "active" ]; then
+    configure_rsyslog
+  elif [ "${SYSLOG_NG_STATUS}" == "active" ]; then
+    configure_syslog_ng
+  fi
 
-# Restart the active syslog daemon
-if [[ "$syslog_daemon" == "rsyslog" ]]; then
-  sudo systemctl stop rsyslog ; sleep 2 ; sudo systemctl start rsyslog
-  echo "rsyslog daemon restarted successfully."
-elif [[ "$syslog_daemon" == "syslog-ng" ]]; then
-  sudo systemctl stop syslog-ng ; sleep 2 ; sudo systemctl start syslog-ng
-  echo "syslog-ng daemon restarted successfully."
-fi
+  cleanup_agent_rpm
+  display_status
+}
 
-
-# Restart the active syslog daemon
-if [[ "$syslog_daemon" == "rsyslog" ]]; then
-  sudo systemctl stop rsyslog ; sleep 3 ; sudo systemctl start rsyslog ; sudo systemctl status rsyslog --no-pager
-  echo "rsyslog daemon restarted successfully."
-elif [[ "$syslog_daemon" == "syslog-ng" ]]; then
-  sudo systemctl stop syslog-ng ; sleep 3 ; sudo systemctl start syslog-ng ; sudo systemctl status syslog-ng --no-pager
-  echo "syslog-ng daemon restarted successfully."
-fi
-
-
-
-
-# Display status
-/etc/init.d/al-agent status
-
-echo "======================"
-echo "Run these commands"
-echo "systemctl restart rsyslog ; systemctl status rsyslog"
-echo "======================"
-
-
-
-
-
+main
