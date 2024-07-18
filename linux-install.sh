@@ -29,6 +29,7 @@ check_rsyslog_running() {
 
 install_rsyslog() {
   sudo yum install -y rsyslog
+  sudo systemctl enable --now rsyslog
 }
 
 download_agent() {
@@ -91,6 +92,10 @@ display_status() {
   fi
 }
 
+restart_rsyslog () {
+  systemctl restart rsyslog
+}
+
 main() {
   AGENT_INSTALLED=$(check_agent_installed)
   RSYSLOG_STATUS=$(check_rsyslog_running)
@@ -118,7 +123,7 @@ main() {
   RSYSLOG_STATUS=$(check_rsyslog_running)
   SYSLOG_NG_STATUS=$(check_syslog_ng_status)
   if [ "${RSYSLOG_STATUS}" == "active" ]; then
-    configure_rsyslog
+    configure_rsyslog && restart_rsyslog
   elif [ "${SYSLOG_NG_STATUS}" == "active" ]; then
     configure_syslog_ng
   fi
