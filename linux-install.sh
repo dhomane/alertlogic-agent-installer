@@ -17,7 +17,7 @@ get_agent_version() {
 }
 
 install_rsyslog() {
-  sudo dnf install -y rsyslog
+  sudo yum install -y rsyslog
   sudo systemctl enable --now rsyslog
 }
 
@@ -26,12 +26,12 @@ download_agent() {
 }
 
 remove_existing_agent() {
-  sudo dnf remove -y al-agent
+  sudo yum remove -y al-agent
   sudo rm -rf /var/alertlogic
 }
 
 install_agent() {
-  sudo dnf install -y "${AGENT_RPM_DEST}"
+  sudo yum install -y "${AGENT_RPM_DEST}"
 }
 
 check_selinux_status() {

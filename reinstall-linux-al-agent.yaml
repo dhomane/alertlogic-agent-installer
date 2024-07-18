@@ -53,13 +53,11 @@
 
     - name: Remove existing AlertLogic Agent and directory
       shell: |
-        dnf remove -y al-agent
+        yum remove -y al-agent
         rm -rf /var/alertlogic
 
     - name: Install the AlertLogic Agent
-      dnf:
-        name: "{{ agent_rpm_dest }}"
-        state: present
+      shell: rpm -ivh {{ agent_rpm_dest }}
 
     - name: Check SELinux status
       command: getenforce
