@@ -9,8 +9,15 @@ check_agent_installed() {
 }
 
 check_agent_running() {
-  /etc/init.d/al-agent status
+  if /etc/init.d/al-agent status | grep -q -v "NOT"; then
+    echo "Agent is running"
+    return 0
+  else
+    echo "Agent is NOT running"
+    return 1
+  fi
 }
+
 
 get_agent_version() {
   rpm -qi al-agent | grep Version | awk '{print $3}'
