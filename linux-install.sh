@@ -16,9 +16,12 @@ get_agent_version() {
   rpm -qi al-agent | grep Version | awk '{print $3}'
 }
 
+check_rsyslog_running() {
+  systemctl is-active rsyslog
+}
+
 install_rsyslog() {
   sudo yum install -y rsyslog
-  sudo systemctl enable --now rsyslog
 }
 
 download_agent() {
@@ -44,10 +47,6 @@ set_selinux_port() {
 
 start_agent() {
   sudo /etc/init.d/al-agent start
-}
-
-check_syslog_status() {
-  systemctl is-active rsyslog
 }
 
 check_syslog_ng_status() {
@@ -87,11 +86,12 @@ display_status() {
 
 main() {
   AGENT_INSTALLED=$(check_agent_installed)
+  RSYSLOG_STATUS=$(check_rsyslog_running)
   if [ -n "${AGENT_INSTALLED}" ]; then
     AGENT_RUNNING=$(check_agent_running)
     AGENT_VERSION=$(get_agent_version)
-    if [ -n "${AGENT_RUNNING}" ] && [ "$(printf '%s\n' "$MIN_VERSION" "$AGENT_VERSION" | sort -V | head -n1)" == "$MIN_VERSION" ]; then
-      echo "AlertLogic Agent is installed, running, and above version ${MIN_VERSION}"
+    if [ -n "${AGENT_RUNNING}" ] && [ "$(printf '%s\n' "$MIN_VERSION" "$AGENT_VERSION" | sort -V | head -n1)" == "$MIN_VERSION" ] && [ "${RSYSLOG_STATUS}" == "active" ]; then
+      echo "AlertLogic Agent is installed, running, and above version ${MIN_VERSION}, and rsyslog is running"
       exit 0
     fi
   fi
@@ -108,7 +108,7 @@ main() {
 
   start_agent
 
-  RSYSLOG_STATUS=$(check_syslog_status)
+  RSYSLOG_STATUS=$(check_rsyslog_running)
   SYSLOG_NG_STATUS=$(check_syslog_ng_status)
   if [ "${RSYSLOG_STATUS}" == "active" ]; then
     configure_rsyslog
