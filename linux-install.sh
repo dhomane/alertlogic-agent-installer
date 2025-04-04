@@ -1,8 +1,33 @@
 #!/bin/bash
 
-AGENT_RPM_URL="https://scc.alertlogic.net/software/al-agent-LATEST-1.x86_64.rpm"
-AGENT_RPM_DEST="/tmp/al-agent-LATEST-1.x86_64.rpm"
+# URLs for different architectures
+AGENT_RPM_X64_URL="https://scc.alertlogic.net/software/al-agent-LATEST-1.x86_64.rpm"
+AGENT_RPM_ARM64_URL="https://scc.alertlogic.net/software/al-agent-LATEST-1.aarch64.rpm"
 MIN_VERSION="2.20"
+
+# Detect architecture
+detect_architecture() {
+  arch=$(uname -m)
+  if [[ "$arch" == "x86_64" ]]; then
+    echo "x86_64"
+    AGENT_RPM_URL="${AGENT_RPM_X64_URL}"
+    AGENT_RPM_DEST="/tmp/al-agent-LATEST-1.x86_64.rpm"
+  elif [[ "$arch" == "aarch64" || "$arch" == "arm64" ]]; then
+    echo "aarch64"
+    AGENT_RPM_URL="${AGENT_RPM_ARM64_URL}"
+    AGENT_RPM_DEST="/tmp/al-agent-LATEST-1.aarch64.rpm"
+  else
+    echo "unsupported"
+    exit 1
+  fi
+}
+
+# Get architecture
+ARCHITECTURE=$(detect_architecture)
+if [ "$ARCHITECTURE" == "unsupported" ]; then
+  echo "Error: Unsupported architecture detected. Only x86_64 and arm64/aarch64 are supported."
+  exit 1
+fi
 
 check_agent_installed() {
   rpm -qa | grep al-agent
@@ -19,8 +44,6 @@ check_agent_running() {
   fi
 }
 
-
-
 get_agent_version() {
   rpm -qi al-agent | grep Version | awk '{print $3}'
 }
@@ -35,6 +58,8 @@ install_rsyslog() {
 }
 
 download_agent() {
+  echo "Downloading AlertLogic agent for $ARCHITECTURE architecture..."
+  echo "Using URL: $AGENT_RPM_URL"
   curl -o "${AGENT_RPM_DEST}" "${AGENT_RPM_URL}"
 }
 
@@ -86,10 +111,10 @@ display_status() {
     echo "AlertLogic Agent is NOT Installed"
   else
     echo "AlertLogic Agent is Installed"
-    if [ -z "$(check_agent_running)" ]; then
-      echo "AlertLogic Agent is NOT Running"
-    else
+    if check_agent_running; then
       echo "AlertLogic Agent is Running"
+    else
+      echo "AlertLogic Agent is NOT Running"
     fi
   fi
 }
@@ -103,10 +128,11 @@ main() {
   RSYSLOG_STATUS=$(check_rsyslog_running)
   
   if [ -n "${AGENT_INSTALLED}" ]; then
-    AGENT_RUNNING=$(check_agent_running)
+    check_agent_running
+    AGENT_RUNNING=$?
     AGENT_VERSION=$(get_agent_version)
     
-    if [ "${AGENT_RUNNING}" == "Agent is running" ] && [ "$(printf '%s\n' "$MIN_VERSION" "$AGENT_VERSION" | sort -V | head -n1)" == "$MIN_VERSION" ] && [ "${RSYSLOG_STATUS}" == "active" ]; then
+    if [ $AGENT_RUNNING -eq 0 ] && [ "$(printf '%s\n' "$MIN_VERSION" "$AGENT_VERSION" | sort -V | head -n1)" == "$MIN_VERSION" ] && [ "${RSYSLOG_STATUS}" == "active" ]; then
       echo "AlertLogic Agent is installed, running, and above version ${MIN_VERSION}, and rsyslog is running"
       exit 0
     fi
