@@ -1,9 +1,27 @@
 #!/bin/bash
 
-# URLs for different architectures
+# URLs for different architectures and package types
 AGENT_RPM_X64_URL="https://scc.alertlogic.net/software/al-agent-LATEST-1.x86_64.rpm"
 AGENT_RPM_ARM64_URL="https://scc.alertlogic.net/software/al-agent-LATEST-1.aarch64.rpm"
+AGENT_DEB_X64_URL="https://scc.alertlogic.net/software/al-agent_LATEST_amd64.deb"
+AGENT_DEB_ARM64_URL="https://scc.alertlogic.net/software/al-agent_LATEST_arm64.deb"
 MIN_VERSION="2.20"
+
+# Detect distribution type
+detect_distro() {
+  if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    if [[ "$ID" == "ubuntu" || "$ID" == "debian" || "$ID_LIKE" == *"debian"* ]]; then
+      echo "debian"
+    elif [[ "$ID" == "rhel" || "$ID" == "centos" || "$ID" == "fedora" || "$ID_LIKE" == *"rhel"* || "$ID_LIKE" == *"fedora"* ]]; then
+      echo "rhel"
+    else
+      echo "unknown"
+    fi
+  else
+    echo "unknown"
+  fi
+}
 
 # Detect architecture
 detect_architecture() {
@@ -17,24 +35,68 @@ detect_architecture() {
   fi
 }
 
-# Get architecture and set appropriate URLs
-ARCHITECTURE=$(detect_architecture)
-if [ "$ARCHITECTURE" == "unsupported" ]; then
-  echo "Error: Unsupported architecture detected. Only x86_64 and arm64/aarch64 are supported."
-  exit 1
-fi
+# Set package manager commands based on distribution
+setup_package_manager() {
+  DISTRO=$(detect_distro)
+  
+  case "$DISTRO" in
+    "debian")
+      PKG_MANAGER="apt"
+      PKG_INSTALL="apt-get install -y"
+      PKG_UPDATE="apt-get update"
+      PKG_REMOVE="apt-get remove -y"
+      SERVICE_MANAGER="systemctl"
+      ;;
+    "rhel")
+      PKG_MANAGER="yum"
+      PKG_INSTALL="yum install -y"
+      PKG_UPDATE="yum check-update"
+      PKG_REMOVE="yum remove -y"
+      SERVICE_MANAGER="systemctl"
+      ;;
+    *)
+      echo "Error: Unsupported distribution. Only Ubuntu/Debian and RHEL/CentOS/Fedora are supported."
+      exit 1
+      ;;
+  esac
+}
 
-# Set URLs based on architecture
-if [ "$ARCHITECTURE" == "x86_64" ]; then
-  AGENT_RPM_URL="${AGENT_RPM_X64_URL}"
-  AGENT_RPM_DEST="/tmp/al-agent-LATEST-1.x86_64.rpm"
-else
-  AGENT_RPM_URL="${AGENT_RPM_ARM64_URL}"
-  AGENT_RPM_DEST="/tmp/al-agent-LATEST-1.aarch64.rpm"
-fi
+# Get architecture and set appropriate URLs
+setup_urls() {
+  ARCHITECTURE=$(detect_architecture)
+  DISTRO=$(detect_distro)
+  
+  if [ "$ARCHITECTURE" == "unsupported" ]; then
+    echo "Error: Unsupported architecture detected. Only x86_64 and arm64/aarch64 are supported."
+    exit 1
+  fi
+
+  # Set URLs and destinations based on architecture and distribution
+  if [ "$DISTRO" == "debian" ]; then
+    if [ "$ARCHITECTURE" == "x86_64" ]; then
+      AGENT_URL="${AGENT_DEB_X64_URL}"
+      AGENT_DEST="/tmp/al-agent_LATEST_amd64.deb"
+    else
+      AGENT_URL="${AGENT_DEB_ARM64_URL}"
+      AGENT_DEST="/tmp/al-agent_LATEST_arm64.deb"
+    fi
+  else
+    if [ "$ARCHITECTURE" == "x86_64" ]; then
+      AGENT_URL="${AGENT_RPM_X64_URL}"
+      AGENT_DEST="/tmp/al-agent-LATEST-1.x86_64.rpm"
+    else
+      AGENT_URL="${AGENT_RPM_ARM64_URL}"
+      AGENT_DEST="/tmp/al-agent-LATEST-1.aarch64.rpm"
+    fi
+  fi
+}
 
 check_agent_installed() {
-  rpm -qa | grep al-agent
+  if [ "$DISTRO" == "debian" ]; then
+    dpkg -l | grep al-agent | awk '{print $2}'
+  else
+    rpm -qa | grep al-agent
+  fi
 }
 
 check_agent_running() {
@@ -54,7 +116,11 @@ check_agent_running() {
 }
 
 get_agent_version() {
-  rpm -qi al-agent 2>/dev/null | grep Version | awk '{print $3}'
+  if [ "$DISTRO" == "debian" ]; then
+    dpkg -s al-agent 2>/dev/null | grep Version | awk '{print $2}' | cut -d'-' -f1
+  else
+    rpm -qi al-agent 2>/dev/null | grep Version | awk '{print $3}'
+  fi
 }
 
 check_rsyslog_running() {
@@ -63,32 +129,37 @@ check_rsyslog_running() {
 
 install_rsyslog() {
   echo "Installing/ensuring rsyslog is available..."
-  sudo yum install -y rsyslog
+  if [ "$DISTRO" == "debian" ]; then
+    sudo $PKG_UPDATE
+    sudo $PKG_INSTALL rsyslog
+  else
+    sudo $PKG_INSTALL rsyslog
+  fi
   sudo systemctl enable --now rsyslog
 }
 
 download_agent() {
-  echo "Downloading AlertLogic agent for $ARCHITECTURE architecture..."
-  echo "Using URL: $AGENT_RPM_URL"
-  echo "Destination: $AGENT_RPM_DEST"
+  echo "Downloading AlertLogic agent for $ARCHITECTURE architecture on $DISTRO-based system..."
+  echo "Using URL: $AGENT_URL"
+  echo "Destination: $AGENT_DEST"
   
   # Verify the URL is not empty
-  if [ -z "$AGENT_RPM_URL" ]; then
+  if [ -z "$AGENT_URL" ]; then
     echo "Error: Package URL is empty. Aborting download."
     exit 1
   fi
   
   # Create directory if it doesn't exist
-  mkdir -p "$(dirname "$AGENT_RPM_DEST")"
+  mkdir -p "$(dirname "$AGENT_DEST")"
   
   # Download with proper error checking
-  if ! curl -L -o "$AGENT_RPM_DEST" "$AGENT_RPM_URL"; then
-    echo "Error: Failed to download agent package from $AGENT_RPM_URL"
+  if ! curl -L -o "$AGENT_DEST" "$AGENT_URL"; then
+    echo "Error: Failed to download agent package from $AGENT_URL"
     exit 1
   fi
   
   # Verify file exists and is not empty
-  if [ ! -s "$AGENT_RPM_DEST" ]; then
+  if [ ! -s "$AGENT_DEST" ]; then
     echo "Error: Downloaded package is empty or does not exist."
     exit 1
   fi
@@ -96,36 +167,68 @@ download_agent() {
 
 remove_existing_agent() {
   echo "Removing any existing AlertLogic agent..."
-  if rpm -q al-agent >/dev/null 2>&1; then
-    sudo yum remove -y al-agent
+  if [ "$DISTRO" == "debian" ]; then
+    if dpkg -l al-agent >/dev/null 2>&1; then
+      sudo $PKG_REMOVE al-agent
+    fi
+  else
+    if rpm -q al-agent >/dev/null 2>&1; then
+      sudo $PKG_REMOVE al-agent
+    fi
   fi
   sudo rm -rf /var/alertlogic
 }
 
 install_agent() {
-  echo "Installing AlertLogic agent from $AGENT_RPM_DEST..."
-  if [ ! -f "$AGENT_RPM_DEST" ]; then
-    echo "Error: Package file not found at $AGENT_RPM_DEST"
+  echo "Installing AlertLogic agent from $AGENT_DEST..."
+  if [ ! -f "$AGENT_DEST" ]; then
+    echo "Error: Package file not found at $AGENT_DEST"
     exit 1
   fi
   
-  sudo yum install -y "$AGENT_RPM_DEST"
+  if [ "$DISTRO" == "debian" ]; then
+    sudo dpkg -i "$AGENT_DEST"
+    # Fix any dependency issues
+    sudo apt-get install -f -y
+  else
+    sudo $PKG_INSTALL "$AGENT_DEST"
+  fi
   
   # Check if installation was successful
-  if ! rpm -q al-agent >/dev/null 2>&1; then
-    echo "Error: Failed to install AlertLogic agent."
-    exit 1
+  if [ "$DISTRO" == "debian" ]; then
+    if ! dpkg -l al-agent >/dev/null 2>&1; then
+      echo "Error: Failed to install AlertLogic agent."
+      exit 1
+    fi
+  else
+    if ! rpm -q al-agent >/dev/null 2>&1; then
+      echo "Error: Failed to install AlertLogic agent."
+      exit 1
+    fi
   fi
 }
 
 check_selinux_status() {
-  getenforce
+  if command -v getenforce >/dev/null 2>&1; then
+    getenforce
+  else
+    echo "Disabled"
+  fi
 }
 
 set_selinux_port() {
   echo "Setting SELinux port for AlertLogic..."
-  sudo yum install -y policycoreutils-python-utils || sudo yum install -y policycoreutils-python
-  sudo semanage port -a -t syslogd_port_t -p tcp 1514
+  if [ "$DISTRO" == "debian" ]; then
+    # SELinux is typically not used on Ubuntu/Debian, but handle it just in case
+    if command -v semanage >/dev/null 2>&1; then
+      sudo semanage port -a -t syslogd_port_t -p tcp 1514
+    else
+      echo "SELinux tools not available on this system"
+    fi
+  else
+    sudo $PKG_INSTALL policycoreutils-python-utils || sudo $PKG_INSTALL policycoreutils-python
+    sudo semanage port -a -t syslogd_port_t -p tcp 1514
+  fi
 }
 
 start_agent() {
@@ -164,30 +267,48 @@ restart_rsyslog() {
   sudo systemctl restart rsyslog
 }
 
-cleanup_agent_rpm() {
+cleanup_agent_package() {
   echo "Cleaning up temporary files..."
-  rm -f "$AGENT_RPM_DEST"
+  rm -f "$AGENT_DEST"
 }
 
 display_status() {
   echo "------------------------"
   echo "AlertLogic Agent Status:"
   echo "------------------------"
+  echo "Distribution: $DISTRO"
   echo "Architecture: $ARCHITECTURE"
   
-  if rpm -q al-agent >/dev/null 2>&1; then
-    echo "AlertLogic Agent: INSTALLED"
-    VERSION=$(get_agent_version)
-    echo "Agent Version: $VERSION"
-    
-    if [ -f "/etc/init.d/al-agent" ]; then
-      STATUS=$(/etc/init.d/al-agent status 2>/dev/null || echo "Status check failed")
-      echo "Status: $STATUS"
+  if [ "$DISTRO" == "debian" ]; then
+    if dpkg -l al-agent >/dev/null 2>&1; then
+      echo "AlertLogic Agent: INSTALLED"
+      VERSION=$(get_agent_version)
+      echo "Agent Version: $VERSION"
+      
+      if [ -f "/etc/init.d/al-agent" ]; then
+        STATUS=$(/etc/init.d/al-agent status 2>/dev/null || echo "Status check failed")
+        echo "Status: $STATUS"
+      else
+        echo "Status: Unknown (agent script not found)"
+      fi
     else
-      echo "Status: Unknown (agent script not found)"
+      echo "AlertLogic Agent: NOT INSTALLED"
     fi
   else
-    echo "AlertLogic Agent: NOT INSTALLED"
+    if rpm -q al-agent >/dev/null 2>&1; then
+      echo "AlertLogic Agent: INSTALLED"
+      VERSION=$(get_agent_version)
+      echo "Agent Version: $VERSION"
+      
+      if [ -f "/etc/init.d/al-agent" ]; then
+        STATUS=$(/etc/init.d/al-agent status 2>/dev/null || echo "Status check failed")
+        echo "Status: $STATUS"
+      else
+        echo "Status: Unknown (agent script not found)"
+      fi
+    else
+      echo "AlertLogic Agent: NOT INSTALLED"
+    fi
   fi
   
   RSYSLOG_STATUS=$(systemctl is-active rsyslog)
@@ -196,7 +317,14 @@ display_status() {
 }
 
 main() {
-  echo "Starting AlertLogic Agent installation for $ARCHITECTURE architecture..."
+  echo "Starting AlertLogic Agent installation..."
+  
+  # Setup distribution-specific variables
+  setup_package_manager
+  setup_urls
+  
+  echo "Detected distribution: $DISTRO"
+  echo "Detected architecture: $ARCHITECTURE"
   
   AGENT_INSTALLED=$(check_agent_installed)
   RSYSLOG_STATUS=$(check_rsyslog_running)
@@ -237,15 +365,24 @@ main() {
   fi
 
   # Final cleanup and status
-  cleanup_agent_rpm
+  cleanup_agent_package
   display_status
   
   # Verify final status of the installation
-  if rpm -q al-agent >/dev/null 2>&1; then
-    echo "AlertLogic Agent installation completed successfully."
+  if [ "$DISTRO" == "debian" ]; then
+    if dpkg -l al-agent >/dev/null 2>&1; then
+      echo "AlertLogic Agent installation completed successfully."
+    else
+      echo "AlertLogic Agent installation failed."
+      exit 1
+    fi
   else
-    echo "AlertLogic Agent installation failed."
-    exit 1
+    if rpm -q al-agent >/dev/null 2>&1; then
+      echo "AlertLogic Agent installation completed successfully."
+    else
+      echo "AlertLogic Agent installation failed."
+      exit 1
+    fi
   fi
 }
 
